@@ -1,13 +1,16 @@
 # numatter-tui
 
-Numatter向けのターミナルUIです。内部で `numatter-client` (TypeScriptライブラリ) を利用します。
+Numatter Developer API 向けのターミナル UI です。内部で `numatter-client` を利用します。
 
-## Features
+## Coverage
 
-- 自分のプロフィール表示
-- 未読通知数の表示
-- 通知一覧の確認
-- 投稿作成
+- Profile API: 表示 / 更新
+- Posts API: 作成 / 単体取得 / スレッド取得 / 削除
+- Interactions API: like / unlike / repost / unrepost
+- Notifications API: 一覧 / 未読数 / 詳細 / mark-as-read(all)
+- Notification Webhooks API: 一覧 / 作成 / 更新 / 削除 / manual send
+- Token endpoints (`/api/developer/tokens`): 一覧 / 作成 / revoke
+  - 注意: これらは通常セッション認証エンドポイントのため、Bearer token では 401/403 の可能性があります
 
 ## Setup
 
@@ -23,16 +26,27 @@ cp .env.example .env
 pnpm dev
 ```
 
-### Keybinds
+## Keybinds
 
-- `r`: ダッシュボード再読み込み
-- `p`: 投稿作成
-- `n`: 通知一覧表示
-- `q`: 終了
+- `r` refresh dashboard
+- `h` help
+- `q` quit
+- `p` create post
+- `o` open post by id
+- `t` open post thread by post id
+- `x` delete post by id
+- `l/u` like/unlike
+- `s/S` repost/unrepost
+- `n` notifications list
+- `m` notifications list + mark all as read
+- `d` notification detail by id
+- `e` edit profile
+- `w/W/a/k/g` webhook list/create/update-active/delete/send
+- `z/Z/v` token list/create/revoke
 
-## Build
+## Test / Build
 
 ```bash
+pnpm test
 pnpm build
-pnpm start
 ```

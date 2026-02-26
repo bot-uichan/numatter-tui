@@ -1,7 +1,25 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import blessed from "blessed";
-import "dotenv/config";
-import { NumatterClient, NumatterApiError } from "numatter-client";
+import { config as loadEnv } from "dotenv";
+import { NumatterApiError } from "numatter-client";
+import { createService } from "./services/numatter-service.js";
+import { initialState } from "./state/app-state.js";
+import { renderState } from "./ui/renderers.js";
+
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const envCandidates = [
+  resolve(process.cwd(), ".env"),
+  resolve(currentDir, "../../.env"),
+  resolve(currentDir, "../../../.env"),
+];
+for (const envPath of envCandidates) {
+  if (existsSync(envPath)) {
+    loadEnv({ path: envPath, override: false });
+  }
+}
 
 const baseUrl = process.env.NUMATTER_BASE_URL;
 const token = process.env.NUMATTER_TOKEN;
@@ -11,157 +29,209 @@ if (!baseUrl || !token) {
   process.exit(1);
 }
 
-const client = new NumatterClient({ baseUrl, token });
+const service = createService(baseUrl, token);
+const state = initialState();
 
-const screen = blessed.screen({
-  smartCSR: true,
-  title: "numatter-tui",
-});
-
-const header = blessed.box({
-  top: 0,
-  left: 0,
-  width: "100%",
-  height: 3,
-  tags: true,
-  style: { fg: "white", bg: "blue" },
-  content: " {bold}numatter-tui{/bold}  [r]refresh [p]post [n]notifications [q]quit",
-});
-
-const body = blessed.box({
-  top: 3,
-  left: 0,
-  width: "100%",
-  height: "100%-3",
-  border: "line",
-  label: " Dashboard ",
-  scrollable: true,
-  alwaysScroll: true,
-  keys: true,
-  vi: true,
-  content: "Loading...",
-});
-
+const screen = blessed.screen({ smartCSR: true, title: "numatter-tui" });
+const header = blessed.box({ top: 0, left: 0, width: "100%", height: 3, tags: true, style: { fg: "white", bg: "blue" }, content: " {bold}numatter-tui{/bold} [h]help [q]quit" });
+const body = blessed.box({ top: 3, left: 0, width: "100%", height: "100%-3", border: "line", label: " Numatter ", scrollable: true, alwaysScroll: true, keys: true, vi: true, content: "Loading..." });
 screen.append(header);
 screen.append(body);
 
-function setMessage(text: string) {
-  body.setContent(text);
+const redraw = () => {
+  body.setContent(renderState(state));
   screen.render();
-}
+};
 
-function toErrorMessage(err: unknown) {
-  if (err instanceof NumatterApiError) {
-    return `API Error (${err.status}): ${err.message}`;
-  }
-  if (err instanceof Error) {
-    return err.message;
-  }
+const toErrorMessage = (err: unknown) => {
+  if (err instanceof NumatterApiError) return `API Error (${err.status}): ${err.message}`;
+  if (err instanceof Error) return err.message;
   return String(err);
-}
+};
 
-async function refreshDashboard() {
+const run = async (message: string, fn: () => Promise<void>) => {
+  state.loading = true;
+  state.message = message;
+  redraw();
   try {
-    setMessage("Loading profile + unread count...");
-    const [{ profile }, unread] = await Promise.all([
-      client.getProfile(),
-      client.getUnreadNotificationCount(),
-    ]);
-
-    setMessage(
-      [
-        `{bold}${profile.name}{/bold} ${profile.handle ? `(@${profile.handle})` : ""}`,
-        "",
-        `${profile.bio ?? "(no bio)"}`,
-        "",
-        `Followers: ${profile.stats.followers}`,
-        `Following: ${profile.stats.following}`,
-        `Posts: ${profile.stats.posts}`,
-        `Unread notifications: ${unread.count}`,
-        "",
-        "Tips:",
-        "- Press [p] to create a new post",
-        "- Press [n] to see latest notifications",
-      ].join("\n")
-    );
+    await fn();
   } catch (err) {
-    setMessage(`Failed to load dashboard\n\n${toErrorMessage(err)}`);
+    state.message = toErrorMessage(err);
+  } finally {
+    state.loading = false;
+    redraw();
   }
-}
+};
 
-function openPrompt(label: string, cb: (value: string) => Promise<void>) {
-  const prompt = blessed.prompt({
-    parent: screen,
-    border: "line",
-    height: 8,
-    width: "70%",
-    top: "center",
-    left: "center",
-    label,
-    tags: true,
-    keys: true,
-    vi: true,
+const ask = (label: string): Promise<string | null> =>
+  new Promise((resolve) => {
+    const prompt = blessed.prompt({ parent: screen, border: "line", height: 8, width: "70%", top: "center", left: "center", label, keys: true, vi: true });
+    prompt.input(label, "", (_err, value) => resolve(value ?? null));
   });
 
-  prompt.input(label, "", async (_err, value) => {
-    if (!value) {
-      screen.render();
-      return;
-    }
-
-    try {
-      await cb(value);
-    } catch (err) {
-      setMessage(`Operation failed\n\n${toErrorMessage(err)}`);
-    }
+const refreshDashboard = async () => {
+  await run("Loading dashboard", async () => {
+    const data = await service.refreshDashboard();
+    state.profile = data.profile;
+    state.unreadCount = data.unreadCount;
+    state.view = "dashboard";
+    state.message = "dashboard updated";
   });
-}
-
-async function showNotifications() {
-  try {
-    setMessage("Loading notifications...");
-    const { items, unreadCount } = await client.getNotifications({ type: "all" });
-
-    const lines = [
-      `{bold}Notifications{/bold} (unread: ${unreadCount})`,
-      "",
-    ];
-
-    if (items.length === 0) {
-      lines.push("No notifications.");
-    } else {
-      for (const item of items.slice(0, 20)) {
-        lines.push(
-          `• [${item.type}] ${item.actor?.name ?? "someone"} - ${new Date(item.createdAt).toLocaleString()}`
-        );
-        const content = item.sourcePost?.content;
-        if (content) {
-          lines.push(`  ${content}`);
-        }
-      }
-    }
-
-    lines.push("", "Press [r] to return dashboard.");
-    setMessage(lines.join("\n"));
-  } catch (err) {
-    setMessage(`Failed to load notifications\n\n${toErrorMessage(err)}`);
-  }
-}
+};
 
 screen.key(["q", "C-c"], () => process.exit(0));
-screen.key(["r"], () => {
-  void refreshDashboard();
+screen.key(["h"], () => {
+  state.view = "help";
+  redraw();
 });
-screen.key(["n"], () => {
-  void showNotifications();
+screen.key(["r"], () => void refreshDashboard());
+screen.key(["p"], async () => {
+  const content = await ask("Post content");
+  if (!content) return;
+  await run("Creating post", async () => {
+    const { post } = await service.client.createPost({ content });
+    state.view = "post";
+    state.selectedPost = post;
+    state.message = `post created: ${post.id}`;
+  });
 });
-screen.key(["p"], () => {
-  openPrompt("Post content", async (value) => {
-    setMessage("Posting...");
-    const res = await client.createPost({ content: value });
-    setMessage(`Posted successfully.\nPost ID: ${res.post.id}\n\nPress [r] to refresh dashboard.`);
+screen.key(["o"], async () => {
+  const postId = await ask("Post ID");
+  if (!postId) return;
+  await run("Loading post", async () => {
+    const { post } = await service.client.getPost(postId);
+    state.view = "post";
+    state.selectedPost = post;
+  });
+});
+screen.key(["t"], async () => {
+  const postId = await ask("Thread post ID");
+  if (!postId) return;
+  await run("Loading thread", async () => {
+    state.thread = await service.client.getPostThread(postId);
+    state.view = "thread";
+  });
+});
+screen.key(["x"], async () => {
+  const postId = await ask("Delete post ID");
+  if (!postId) return;
+  await run("Deleting post", async () => {
+    await service.client.deletePost(postId);
+    state.message = `deleted post: ${postId}`;
+  });
+});
+screen.key(["l", "u", "s", "S"], async (_ch, key) => {
+  const postId = await ask(`${key.full} post ID`);
+  if (!postId) return;
+  await run("Updating interaction", async () => {
+    const summary =
+      key.full === "l"
+        ? await service.client.likePost(postId)
+        : key.full === "u"
+          ? await service.client.unlikePost(postId)
+          : key.full === "s"
+            ? await service.client.repost(postId)
+            : await service.client.unrepost(postId);
+    state.message = `likes=${summary.likes} reposts=${summary.reposts}`;
+  });
+});
+screen.key(["n", "m"], async (_ch, key) => {
+  await run("Loading notifications", async () => {
+    const { items, unreadCount } = await service.client.getNotifications({ type: "all", markAsRead: key.full === "m" });
+    state.view = "notifications";
+    state.notifications = items;
+    state.unreadCount = unreadCount;
+    state.message = key.full === "m" ? "marked as read" : "";
+  });
+});
+screen.key(["d"], async () => {
+  const id = await ask("Notification ID");
+  if (!id) return;
+  await run("Loading notification detail", async () => {
+    const { notification } = await service.client.getNotification(id);
+    state.selectedNotification = notification;
+    state.view = "notification-detail";
+  });
+});
+screen.key(["e"], async () => {
+  const name = await ask("name (blank to skip)");
+  const handle = await ask("handle (blank to skip, 'null' to clear)");
+  const bio = await ask("bio (blank to skip, 'null' to clear)");
+  await run("Updating profile", async () => {
+    const payload: Record<string, string | null> = {};
+    if (name) payload.name = name;
+    if (handle) payload.handle = handle === "null" ? null : handle;
+    if (bio) payload.bio = bio === "null" ? null : bio;
+    const { profile } = await service.client.updateProfile(payload);
+    state.profile = profile;
+    state.view = "dashboard";
+  });
+});
+screen.key(["w"], async () => {
+  await run("Loading webhooks", async () => {
+    const { webhooks } = await service.client.listWebhooks();
+    state.webhooks = webhooks;
+    state.view = "webhooks";
+  });
+});
+screen.key(["W"], async () => {
+  const name = await ask("Webhook name");
+  const endpoint = await ask("Webhook endpoint");
+  if (!name || !endpoint) return;
+  await run("Creating webhook", async () => {
+    const result = await service.client.createWebhook({ name, endpoint, isActive: true });
+    state.message = `created webhook ${result.webhook.id} secret=${result.plainSecret}`;
+  });
+});
+screen.key(["a"], async () => {
+  const id = await ask("Webhook ID");
+  const active = await ask("isActive true/false");
+  if (!id || !active) return;
+  await run("Updating webhook", async () => {
+    await service.client.updateWebhook(id, { isActive: active === "true" });
+    state.message = `updated webhook ${id}`;
+  });
+});
+screen.key(["k"], async () => {
+  const id = await ask("Delete webhook ID");
+  if (!id) return;
+  await run("Deleting webhook", async () => {
+    await service.client.deleteWebhook(id);
+    state.message = `deleted webhook ${id}`;
+  });
+});
+screen.key(["g"], async () => {
+  const webhookId = await ask("Webhook ID (blank=all active)");
+  await run("Sending webhook snapshot", async () => {
+    const res = await service.client.sendWebhook(webhookId ? { webhookId, type: "all" } : {});
+    state.message = `sent ${res.results.length} deliveries`;
+  });
+});
+screen.key(["z"], async () => {
+  await run("Listing tokens", async () => {
+    const { tokens } = await service.client.listTokens();
+    state.tokens = tokens;
+    state.view = "tokens";
+  });
+});
+screen.key(["Z"], async () => {
+  const name = await ask("Token name");
+  const exp = await ask("expiresInDays (blank=default, null=non-expire)");
+  if (!name) return;
+  await run("Creating token", async () => {
+    const expiresInDays = exp === "null" ? null : exp ? Number(exp) : undefined;
+    const { token, plainToken } = await service.client.createToken({ name, expiresInDays });
+    state.message = `token ${token.id} created plainToken=${plainToken}`;
+  });
+});
+screen.key(["v"], async () => {
+  const tokenId = await ask("Revoke token ID");
+  if (!tokenId) return;
+  await run("Revoking token", async () => {
+    await service.client.revokeToken(tokenId);
+    state.message = `revoked ${tokenId}`;
   });
 });
 
 void refreshDashboard();
-screen.render();
+redraw();
