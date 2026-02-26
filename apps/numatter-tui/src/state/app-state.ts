@@ -61,7 +61,7 @@ export const keyHelp: Array<{ key: string; action: string }> = [
   { key: "w", action: "list webhooks" },
   { key: "W", action: "create webhook" },
   { key: "a", action: "update webhook isActive" },
-  { key: "k", action: "delete webhook" },
+  { key: "D", action: "delete webhook" },
   { key: "g", action: "send webhook snapshot" },
   { key: "z", action: "list tokens" },
   { key: "Z", action: "create token" },

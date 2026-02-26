@@ -276,7 +276,7 @@ screen.key(["a"], async () => {
     state.message = `updated webhook ${id}`;
   });
 });
-screen.key(["k"], async () => {
+screen.key(["D"], async () => {
   const id = await ask("Delete webhook ID");
   if (!id) return;
   await run("Deleting webhook", async () => {
