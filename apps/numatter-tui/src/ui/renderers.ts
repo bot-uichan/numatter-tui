@@ -9,21 +9,27 @@ export const renderState = (state: AppState): string => {
   switch (state.view) {
     case "dashboard":
       return renderDashboard(state);
-    case "timeline":
+    case "timeline": {
+      const visible = 20;
+      const start = Math.max(0, state.selectedTimelineIndex - Math.floor(visible / 2));
+      const end = Math.min(state.timeline.length, start + visible);
       return [
         `Timeline ${state.timelineTab ? `[${state.timelineTab}]` : ""} ${state.timelineUserId ? `(user:${state.timelineUserId})` : ""}`,
         line,
         ...(state.timeline.length === 0
           ? ["No timeline items"]
-          : state.timeline.slice(0, 50).map((item, index) => {
-              const prefix = index === state.selectedTimelineIndex ? "▶" : " ";
+          : state.timeline.slice(start, end).map((item, i) => {
+              const actualIndex = start + i;
+              const prefix = actualIndex === state.selectedTimelineIndex ? "▶" : " ";
               const author = item.post.author?.handle ?? item.post.author?.name ?? "unknown";
               const content = (item.post.content ?? "").replaceAll("\n", " ");
               return `${prefix} ${item.id} @${author}: ${content}`;
             })),
         "",
-        "j/k or ↑/↓: select  Enter: open  l: like  s: repost  u: user timeline",
+        `items: ${state.timeline.length}  selected: ${state.selectedTimelineIndex + 1}`,
+        "j/k or ↑/↓: select  Enter: open  l: like  s: repost  U: user timeline",
       ].join("\n");
+    }
     case "notifications":
       return [
         "Notifications",

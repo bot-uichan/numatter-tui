@@ -10,6 +10,7 @@ export type AppState = {
   unreadCount: number;
   timeline: TimelineItem[];
   selectedTimelineIndex: number;
+  timelineLimit: number;
   timelineUserId?: string;
   timelineTab?: "posts" | "replies" | "media" | "likes";
   notifications: NotificationItem[];
@@ -28,6 +29,7 @@ export const initialState = (): AppState => ({
   unreadCount: 0,
   timeline: [],
   selectedTimelineIndex: 0,
+  timelineLimit: 50,
   notifications: [],
   selectedNotification: null,
   selectedPost: null,
@@ -47,7 +49,7 @@ export const keyHelp: Array<{ key: string; action: string }> = [
   { key: "s", action: "repost post by id" },
   { key: "S", action: "unrepost post by id" },
   { key: "f", action: "load timeline with filter" },
-  { key: "j/k or ↓/↑", action: "move timeline selection" },
+  { key: "j/k or ↓/↑", action: "move timeline selection (bottomで追加読込)" },
   { key: "Enter", action: "open selected post" },
   { key: "U", action: "open selected user timeline" },
   { key: "l", action: "like selected timeline post" },

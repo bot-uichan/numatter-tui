@@ -85,15 +85,25 @@ const refreshDashboard = async () => {
   });
 };
 
-const loadTimeline = async (options?: { userId?: string; tab?: "posts" | "replies" | "media" | "likes" }) => {
+const loadTimeline = async (
+  options?: { userId?: string; tab?: "posts" | "replies" | "media" | "likes"; keepSelection?: boolean; append?: boolean }
+) => {
   await run("Loading timeline", async () => {
-    const { items } = await service.client.getTimeline(options);
+    const { items } = await service.client.getTimeline({
+      userId: options?.userId ?? state.timelineUserId,
+      tab: options?.tab ?? state.timelineTab,
+      limit: state.timelineLimit,
+    });
     state.timeline = items;
-    state.timelineUserId = options?.userId;
-    state.timelineTab = options?.tab;
-    state.selectedTimelineIndex = 0;
+    state.timelineUserId = options?.userId ?? state.timelineUserId;
+    state.timelineTab = options?.tab ?? state.timelineTab;
+    if (!options?.keepSelection) {
+      state.selectedTimelineIndex = 0;
+    } else {
+      state.selectedTimelineIndex = Math.min(state.selectedTimelineIndex, Math.max(items.length - 1, 0));
+    }
     state.view = "timeline";
-    state.message = `timeline loaded: ${items.length} items`;
+    state.message = `${options?.append ? "timeline extended" : "timeline loaded"}: ${items.length} items (limit=${state.timelineLimit})`;
   });
 };
 
@@ -159,6 +169,7 @@ screen.key(["l", "u", "s", "S"], async (_ch, key) => {
 screen.key(["f"], async () => {
   const tabInput = await ask("Timeline tab posts/replies/media/likes (blank=default)");
   const userId = await ask("Timeline userId (blank=self/global)");
+  state.timelineLimit = 50;
   await loadTimeline({
     tab: tabInput ? (tabInput as "posts" | "replies" | "media" | "likes") : undefined,
     userId: userId || undefined,
@@ -167,6 +178,14 @@ screen.key(["f"], async () => {
 
 screen.key(["j", "down"], () => {
   if (state.view !== "timeline" || state.timeline.length === 0) return;
+
+  const atBottom = state.selectedTimelineIndex >= state.timeline.length - 1;
+  if (atBottom) {
+    state.timelineLimit += 50;
+    void loadTimeline({ keepSelection: true, append: true });
+    return;
+  }
+
   state.selectedTimelineIndex = Math.min(state.selectedTimelineIndex + 1, state.timeline.length - 1);
   redraw();
 });
@@ -196,6 +215,7 @@ screen.key(["U"], async () => {
     redraw();
     return;
   }
+  state.timelineLimit = 50;
   await loadTimeline({ userId });
 });
 

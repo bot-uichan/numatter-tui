@@ -175,10 +175,11 @@ export class NumatterClient {
     return this.request("DELETE", `/v1/posts/${encodeURIComponent(postId)}/reposts`);
   }
 
-  getTimeline(input?: { userId?: string; tab?: TimelineTab }): Promise<{ items: TimelineItem[] }> {
+  getTimeline(input?: { userId?: string; tab?: TimelineTab; limit?: number }): Promise<{ items: TimelineItem[] }> {
     const params = new URLSearchParams();
     if (input?.userId) params.set("userId", input.userId);
     if (input?.tab) params.set("tab", input.tab);
+    if (input?.limit) params.set("limit", String(input.limit));
     const query = params.toString();
     return this.requestPublic("GET", `/api/posts${query ? `?${query}` : ""}`);
   }
