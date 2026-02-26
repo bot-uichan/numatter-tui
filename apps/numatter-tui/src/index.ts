@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import blessed from "blessed";
+import type { Widgets } from "blessed";
 import { config as loadEnv } from "dotenv";
 import { NumatterApiError } from "numatter-client";
 import { createService } from "./services/numatter-service.js";
@@ -41,6 +42,87 @@ const header = blessed.box({ top: 0, left: 0, width: "100%", height: 3, tags: tr
 const body = blessed.box({ top: 3, left: 0, width: "100%", height: "100%-3", border: "line", label: " Numatter ", scrollable: true, alwaysScroll: true, keys: true, vi: true, content: "Loading..." });
 screen.append(header);
 screen.append(body);
+
+const KONAMI_SEQUENCE = ["up", "up", "down", "down", "left", "right", "left", "right", "b", "a"] as const;
+const konamiBuffer: string[] = [];
+let danceModal: Widgets.BoxElement | null = null;
+let danceInterval: NodeJS.Timeout | null = null;
+let danceFrame = 0;
+
+const uiDanceFrames = [
+  String.raw`
+(\_/)
+( •_•)  ♪
+/ >🌧️   ういちゃんダンス
+`,
+  String.raw`
+(\_/)
+( •_•)ノ♪
+< 🌧️ >   ういちゃんダンス
+`,
+  String.raw`
+(\_/)
+ヽ(•_• )  ♪
+/ 🌧️\     ういちゃんダンス
+`,
+  String.raw`
+(\_/)
+( •_•)  ♪
+\ 🌧️ /   ういちゃんダンス
+`,
+] as const;
+
+const closeUiDanceModal = () => {
+  if (danceInterval) {
+    clearInterval(danceInterval);
+    danceInterval = null;
+  }
+  if (danceModal) {
+    danceModal.detach();
+    danceModal = null;
+  }
+  redraw();
+};
+
+const openUiDanceModal = () => {
+  closeUiDanceModal();
+
+  danceModal = blessed.box({
+    parent: screen,
+    top: "center",
+    left: "center",
+    width: "80%",
+    height: 16,
+    border: "line",
+    label: " 🌧️ KONAMI SECRET: しぐれういステージ ",
+    tags: true,
+    align: "center",
+    valign: "middle",
+    padding: { top: 1, bottom: 1, left: 2, right: 2 },
+    style: {
+      fg: "magenta",
+      border: { fg: "cyan" },
+      bg: "black",
+    },
+  });
+
+  danceFrame = 0;
+  danceModal.setContent(`{bold}ういビームは安売りしません。{/bold}\n\n${uiDanceFrames[danceFrame]}\n\n{gray-fg}ESC / q / Enter で閉じる{/gray-fg}`);
+
+  danceInterval = setInterval(() => {
+    if (!danceModal) return;
+    danceFrame = (danceFrame + 1) % uiDanceFrames.length;
+    danceModal.setContent(`{bold}ういビームは安売りしません。{/bold}\n\n${uiDanceFrames[danceFrame]}\n\n{gray-fg}ESC / q / Enter で閉じる{/gray-fg}`);
+    screen.render();
+  }, 220);
+
+  danceModal.key(["escape", "q", "enter"], () => {
+    closeUiDanceModal();
+  });
+
+  danceModal.focus();
+  screen.render();
+};
 
 const redraw = () => {
   body.setContent(renderState(state));
@@ -107,7 +189,26 @@ const loadTimeline = async (
   });
 };
 
-screen.key(["q", "C-c"], () => process.exit(0));
+screen.on("keypress", (_ch, key) => {
+  const pressed = key.name ?? "";
+  if (!pressed) return;
+
+  konamiBuffer.push(pressed);
+  if (konamiBuffer.length > KONAMI_SEQUENCE.length) {
+    konamiBuffer.shift();
+  }
+
+  const matched = KONAMI_SEQUENCE.every((expected, index) => konamiBuffer[index] === expected);
+  if (matched) {
+    konamiBuffer.length = 0;
+    openUiDanceModal();
+  }
+});
+
+screen.key(["q", "C-c"], () => {
+  closeUiDanceModal();
+  process.exit(0);
+});
 screen.key(["h"], () => {
   state.view = "help";
   redraw();
