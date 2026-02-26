@@ -1,0 +1,23 @@
+{
+  "name": "numatter-tui",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "numatter-tui": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81",
+    "dotenv": "^17.2.3",
+    "numatter-client": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/blessed": "^0.1.25",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3"
+  }
+}
