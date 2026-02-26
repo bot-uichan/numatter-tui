@@ -5,6 +5,10 @@
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm --filter numatter-tui dev",
-    "start": "pnpm --filter numatter-tui start"
+    "start": "pnpm --filter numatter-tui start",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.8"
   }
 }
