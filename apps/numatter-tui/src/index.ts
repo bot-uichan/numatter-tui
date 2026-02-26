@@ -32,8 +32,12 @@ if (!baseUrl || !token) {
 const service = createService(baseUrl, token);
 const state = initialState();
 
-const screen = blessed.screen({ smartCSR: true, title: "numatter-tui" });
-const header = blessed.box({ top: 0, left: 0, width: "100%", height: 3, tags: true, style: { fg: "white", bg: "blue" }, content: " {bold}numatter-tui{/bold} [h]help [q]quit" });
+if (!process.env.LANG?.toLowerCase().includes("utf-8") && !process.env.LC_ALL?.toLowerCase().includes("utf-8")) {
+  process.env.LANG = process.env.LANG ?? "C.UTF-8";
+}
+
+const screen = blessed.screen({ smartCSR: true, fullUnicode: true, dockBorders: true, title: "numatter-tui" });
+const header = blessed.box({ top: 0, left: 0, width: "100%", height: 3, tags: true, style: { fg: "white", bg: "blue" }, content: " {bold}numatter-tui{/bold} [f]timeline [h]help [q]quit" });
 const body = blessed.box({ top: 3, left: 0, width: "100%", height: "100%-3", border: "line", label: " Numatter ", scrollable: true, alwaysScroll: true, keys: true, vi: true, content: "Loading..." });
 screen.append(header);
 screen.append(body);
@@ -74,8 +78,22 @@ const refreshDashboard = async () => {
     const data = await service.refreshDashboard();
     state.profile = data.profile;
     state.unreadCount = data.unreadCount;
-    state.view = "dashboard";
+    if (state.view !== "timeline") {
+      state.view = "dashboard";
+    }
     state.message = "dashboard updated";
+  });
+};
+
+const loadTimeline = async (options?: { userId?: string; tab?: "posts" | "replies" | "media" | "likes" }) => {
+  await run("Loading timeline", async () => {
+    const { items } = await service.client.getTimeline(options);
+    state.timeline = items;
+    state.timelineUserId = options?.userId;
+    state.timelineTab = options?.tab;
+    state.selectedTimelineIndex = 0;
+    state.view = "timeline";
+    state.message = `timeline loaded: ${items.length} items`;
   });
 };
 
@@ -121,8 +139,11 @@ screen.key(["x"], async () => {
   });
 });
 screen.key(["l", "u", "s", "S"], async (_ch, key) => {
-  const postId = await ask(`${key.full} post ID`);
+  const selectedPostId = state.timeline[state.selectedTimelineIndex]?.post.id;
+  const useSelected = state.view === "timeline" && selectedPostId;
+  const postId = useSelected ? selectedPostId : await ask(`${key.full} post ID`);
   if (!postId) return;
+
   await run("Updating interaction", async () => {
     const summary =
       key.full === "l"
@@ -138,15 +159,44 @@ screen.key(["l", "u", "s", "S"], async (_ch, key) => {
 screen.key(["f"], async () => {
   const tabInput = await ask("Timeline tab posts/replies/media/likes (blank=default)");
   const userId = await ask("Timeline userId (blank=self/global)");
-  await run("Loading timeline", async () => {
-    const { items } = await service.client.getTimeline({
-      tab: tabInput ? (tabInput as "posts" | "replies" | "media" | "likes") : undefined,
-      userId: userId || undefined,
-    });
-    state.timeline = items;
-    state.view = "timeline";
-    state.message = `timeline loaded: ${items.length} items`;
+  await loadTimeline({
+    tab: tabInput ? (tabInput as "posts" | "replies" | "media" | "likes") : undefined,
+    userId: userId || undefined,
   });
+});
+
+screen.key(["j", "down"], () => {
+  if (state.view !== "timeline" || state.timeline.length === 0) return;
+  state.selectedTimelineIndex = Math.min(state.selectedTimelineIndex + 1, state.timeline.length - 1);
+  redraw();
+});
+
+screen.key(["k", "up"], () => {
+  if (state.view !== "timeline" || state.timeline.length === 0) return;
+  state.selectedTimelineIndex = Math.max(state.selectedTimelineIndex - 1, 0);
+  redraw();
+});
+
+screen.key(["enter"], async () => {
+  if (state.view !== "timeline") return;
+  const postId = state.timeline[state.selectedTimelineIndex]?.post.id;
+  if (!postId) return;
+  await run("Loading post", async () => {
+    const { post } = await service.client.getPost(postId);
+    state.selectedPost = post;
+    state.view = "post";
+  });
+});
+
+screen.key(["U"], async () => {
+  if (state.view !== "timeline") return;
+  const userId = state.timeline[state.selectedTimelineIndex]?.post.author?.id;
+  if (!userId) {
+    state.message = "selected post has no author id";
+    redraw();
+    return;
+  }
+  await loadTimeline({ userId });
 });
 
 screen.key(["n", "m"], async (_ch, key) => {
@@ -247,5 +297,8 @@ screen.key(["v"], async () => {
   });
 });
 
-void refreshDashboard();
+void (async () => {
+  await refreshDashboard();
+  await loadTimeline();
+})();
 redraw();

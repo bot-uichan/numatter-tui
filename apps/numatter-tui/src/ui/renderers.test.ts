@@ -18,6 +18,7 @@ describe("renderState", () => {
       updatedAt: new Date().toISOString(),
       stats: { followers: 1, following: 2, posts: 3 },
     };
+    state.view = "dashboard";
     const view = renderState(state);
     expect(view).toContain("Alice");
     expect(view).toContain("unread notifications: 4");

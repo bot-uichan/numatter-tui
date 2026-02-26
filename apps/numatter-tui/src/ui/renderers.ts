@@ -11,11 +11,18 @@ export const renderState = (state: AppState): string => {
       return renderDashboard(state);
     case "timeline":
       return [
-        "Timeline",
+        `Timeline ${state.timelineTab ? `[${state.timelineTab}]` : ""} ${state.timelineUserId ? `(user:${state.timelineUserId})` : ""}`,
         line,
         ...(state.timeline.length === 0
           ? ["No timeline items"]
-          : state.timeline.slice(0, 50).map((item) => `• ${item.id} @${item.post.author?.handle ?? "unknown"}: ${item.post.content ?? ""}`)),
+          : state.timeline.slice(0, 50).map((item, index) => {
+              const prefix = index === state.selectedTimelineIndex ? "▶" : " ";
+              const author = item.post.author?.handle ?? item.post.author?.name ?? "unknown";
+              const content = (item.post.content ?? "").replaceAll("\n", " ");
+              return `${prefix} ${item.id} @${author}: ${content}`;
+            })),
+        "",
+        "j/k or ↑/↓: select  Enter: open  l: like  s: repost  u: user timeline",
       ].join("\n");
     case "notifications":
       return [

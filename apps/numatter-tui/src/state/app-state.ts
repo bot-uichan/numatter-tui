@@ -9,6 +9,9 @@ export type AppState = {
   profile: DeveloperProfile | null;
   unreadCount: number;
   timeline: TimelineItem[];
+  selectedTimelineIndex: number;
+  timelineUserId?: string;
+  timelineTab?: "posts" | "replies" | "media" | "likes";
   notifications: NotificationItem[];
   selectedNotification: NotificationDetail | null;
   selectedPost: PostSummary | null;
@@ -18,12 +21,13 @@ export type AppState = {
 };
 
 export const initialState = (): AppState => ({
-  view: "dashboard",
+  view: "timeline",
   loading: false,
   message: "",
   profile: null,
   unreadCount: 0,
   timeline: [],
+  selectedTimelineIndex: 0,
   notifications: [],
   selectedNotification: null,
   selectedPost: null,
@@ -42,7 +46,12 @@ export const keyHelp: Array<{ key: string; action: string }> = [
   { key: "u", action: "unlike post by id" },
   { key: "s", action: "repost post by id" },
   { key: "S", action: "unrepost post by id" },
-  { key: "f", action: "load timeline" },
+  { key: "f", action: "load timeline with filter" },
+  { key: "j/k or ↓/↑", action: "move timeline selection" },
+  { key: "Enter", action: "open selected post" },
+  { key: "U", action: "open selected user timeline" },
+  { key: "l", action: "like selected timeline post" },
+  { key: "s", action: "repost selected timeline post" },
   { key: "n", action: "list notifications" },
   { key: "m", action: "list notifications + mark all read" },
   { key: "d", action: "notification detail by id" },
