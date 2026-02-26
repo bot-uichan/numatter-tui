@@ -1,6 +1,6 @@
-import type { DeveloperProfile, NotificationDetail, NotificationItem, PostSummary, Webhook, DeveloperToken } from "numatter-client";
+import type { DeveloperProfile, NotificationDetail, NotificationItem, PostSummary, TimelineItem, Webhook, DeveloperToken } from "numatter-client";
 
-export type ViewName = "dashboard" | "notifications" | "notification-detail" | "post" | "thread" | "webhooks" | "tokens" | "help";
+export type ViewName = "dashboard" | "timeline" | "notifications" | "notification-detail" | "post" | "thread" | "webhooks" | "tokens" | "help";
 
 export type AppState = {
   view: ViewName;
@@ -8,6 +8,7 @@ export type AppState = {
   message: string;
   profile: DeveloperProfile | null;
   unreadCount: number;
+  timeline: TimelineItem[];
   notifications: NotificationItem[];
   selectedNotification: NotificationDetail | null;
   selectedPost: PostSummary | null;
@@ -22,6 +23,7 @@ export const initialState = (): AppState => ({
   message: "",
   profile: null,
   unreadCount: 0,
+  timeline: [],
   notifications: [],
   selectedNotification: null,
   selectedPost: null,
@@ -40,6 +42,7 @@ export const keyHelp: Array<{ key: string; action: string }> = [
   { key: "u", action: "unlike post by id" },
   { key: "s", action: "repost post by id" },
   { key: "S", action: "unrepost post by id" },
+  { key: "f", action: "load timeline" },
   { key: "n", action: "list notifications" },
   { key: "m", action: "list notifications + mark all read" },
   { key: "d", action: "notification detail by id" },

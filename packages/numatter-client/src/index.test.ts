@@ -48,6 +48,16 @@ describe("NumatterClient", () => {
     expect(form.get("replyToPostId")).toBe("root");
   });
 
+  it("calls timeline endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse({ json: { items: [] } }));
+    const client = new NumatterClient({ baseUrl: "https://example.com", token: "t", fetch: fetchMock as unknown as typeof fetch });
+
+    await client.getTimeline({ tab: "media", userId: "u1" });
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://example.com/api/posts?userId=u1&tab=media");
+  });
+
   it("builds notification query params", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockResponse({ json: { items: [], unreadCount: 0 } }));
     const client = new NumatterClient({ baseUrl: "https://example.com", token: "t", fetch: fetchMock as unknown as typeof fetch });

@@ -9,6 +9,14 @@ export const renderState = (state: AppState): string => {
   switch (state.view) {
     case "dashboard":
       return renderDashboard(state);
+    case "timeline":
+      return [
+        "Timeline",
+        line,
+        ...(state.timeline.length === 0
+          ? ["No timeline items"]
+          : state.timeline.slice(0, 50).map((item) => `• ${item.id} @${item.post.author?.handle ?? "unknown"}: ${item.post.content ?? ""}`)),
+      ].join("\n");
     case "notifications":
       return [
         "Notifications",

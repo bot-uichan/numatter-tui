@@ -135,6 +135,20 @@ screen.key(["l", "u", "s", "S"], async (_ch, key) => {
     state.message = `likes=${summary.likes} reposts=${summary.reposts}`;
   });
 });
+screen.key(["f"], async () => {
+  const tabInput = await ask("Timeline tab posts/replies/media/likes (blank=default)");
+  const userId = await ask("Timeline userId (blank=self/global)");
+  await run("Loading timeline", async () => {
+    const { items } = await service.client.getTimeline({
+      tab: tabInput ? (tabInput as "posts" | "replies" | "media" | "likes") : undefined,
+      userId: userId || undefined,
+    });
+    state.timeline = items;
+    state.view = "timeline";
+    state.message = `timeline loaded: ${items.length} items`;
+  });
+});
+
 screen.key(["n", "m"], async (_ch, key) => {
   await run("Loading notifications", async () => {
     const { items, unreadCount } = await service.client.getNotifications({ type: "all", markAsRead: key.full === "m" });

@@ -18,6 +18,16 @@ export type NumatterClientOptions = {
   fetch?: typeof fetch;
 };
 
+export type TimelineTab = "posts" | "replies" | "media" | "likes";
+
+export type TimelineItem = {
+  id: string;
+  post: PostSummary;
+  actor?: { id: string; name: string; handle: string | null };
+  type?: string;
+  createdAt: string;
+};
+
 export type DeveloperProfile = {
   id: string;
   name: string;
@@ -165,6 +175,14 @@ export class NumatterClient {
     return this.request("DELETE", `/v1/posts/${encodeURIComponent(postId)}/reposts`);
   }
 
+  getTimeline(input?: { userId?: string; tab?: TimelineTab }): Promise<{ items: TimelineItem[] }> {
+    const params = new URLSearchParams();
+    if (input?.userId) params.set("userId", input.userId);
+    if (input?.tab) params.set("tab", input.tab);
+    const query = params.toString();
+    return this.requestPublic("GET", `/api/posts${query ? `?${query}` : ""}`);
+  }
+
   getNotifications(input?: { type?: NotificationFilter; markAsRead?: boolean }): Promise<{ items: NotificationItem[]; unreadCount: number }> {
     const params = new URLSearchParams();
     if (input?.type) params.set("type", input.type);
@@ -211,6 +229,39 @@ export class NumatterClient {
 
   revokeToken(tokenId: string): Promise<{ token: DeveloperToken }> {
     return this.request("DELETE", `/tokens/${encodeURIComponent(tokenId)}`);
+  }
+
+  private async requestPublic<T>(
+    method: "GET" | "POST" | "PATCH" | "DELETE",
+    path: string,
+    options?: { json?: unknown; formData?: FormData }
+  ): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
+
+    let body: BodyInit | undefined;
+    let headers: HeadersInit | undefined;
+    if (options?.formData) {
+      body = options.formData;
+    } else if (options?.json !== undefined) {
+      headers = { "content-type": "application/json" };
+      body = JSON.stringify(options.json);
+    }
+
+    const res = await this.fetchImpl(url, { method, headers, body });
+    const data: unknown = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const message =
+        typeof data === "object" &&
+        data !== null &&
+        (("error" in data && typeof (data as ApiErrorResponse).error === "string" && (data as ApiErrorResponse).error) ||
+          ("message" in data && typeof (data as ApiErrorResponse).message === "string" && (data as ApiErrorResponse).message))
+          ? ((data as ApiErrorResponse).error ?? (data as ApiErrorResponse).message) as string
+          : `Numatter API request failed (${res.status})`;
+      throw new NumatterApiError(message, res.status, data);
+    }
+
+    return data as T;
   }
 
   private async request<T>(
