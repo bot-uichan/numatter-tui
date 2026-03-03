@@ -16,6 +16,7 @@ export type NumatterClientOptions = {
   baseUrl: string;
   token: string;
   fetch?: typeof fetch;
+  totpProvider?: () => Promise<string | null>;
 };
 
 export type TimelineTab = "posts" | "replies" | "media" | "likes";
@@ -123,11 +124,13 @@ export class NumatterClient {
   private readonly baseUrl: string;
   private readonly token: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly totpProvider?: () => Promise<string | null>;
 
   constructor(options: NumatterClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.token = options.token;
     this.fetchImpl = options.fetch ?? fetch;
+    this.totpProvider = options.totpProvider;
   }
 
   getProfile(): Promise<{ profile: DeveloperProfile }> {
@@ -271,18 +274,39 @@ export class NumatterClient {
     options?: { json?: unknown; formData?: FormData }
   ): Promise<T> {
     const url = `${this.baseUrl}/api/developer${path}`;
-    const headers = new Headers({ Authorization: `Bearer ${this.token}` });
 
-    let body: BodyInit | undefined;
-    if (options?.formData) {
-      body = options.formData;
-    } else if (options?.json !== undefined) {
-      headers.set("content-type", "application/json");
-      body = JSON.stringify(options.json);
+    const makeHeaders = (totpCode?: string) => {
+      const headers = new Headers({ Authorization: `Bearer ${this.token}` });
+      if (totpCode) {
+        headers.set("x-totp-code", totpCode);
+        headers.set("x-otp-code", totpCode);
+      }
+      if (options?.json !== undefined) {
+        headers.set("content-type", "application/json");
+      }
+      return headers;
+    };
+
+    const makeBody = () => {
+      if (options?.formData) return options.formData as BodyInit;
+      if (options?.json !== undefined) return JSON.stringify(options.json);
+      return undefined;
+    };
+
+    const call = async (totpCode?: string) => {
+      const res = await this.fetchImpl(url, { method, headers: makeHeaders(totpCode), body: makeBody() });
+      const data: unknown = await res.json().catch(() => null);
+      return { res, data };
+    };
+
+    let { res, data } = await call();
+
+    if (!res.ok && this.shouldRetryWithTotp(res.status, data) && this.totpProvider) {
+      const totpCode = (await this.totpProvider())?.trim();
+      if (totpCode) {
+        ({ res, data } = await call(totpCode));
+      }
     }
-
-    const res = await this.fetchImpl(url, { method, headers, body });
-    const data: unknown = await res.json().catch(() => null);
 
     if (!res.ok) {
       const message =
@@ -296,5 +320,19 @@ export class NumatterClient {
     }
 
     return data as T;
+  }
+
+  private shouldRetryWithTotp(status: number, data: unknown): boolean {
+    if (status !== 401 && status !== 403) return false;
+    if (!data || typeof data !== "object") return false;
+
+    const errorText = [
+      "error" in data && typeof (data as ApiErrorResponse).error === "string" ? (data as ApiErrorResponse).error : "",
+      "message" in data && typeof (data as ApiErrorResponse).message === "string" ? (data as ApiErrorResponse).message : "",
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return errorText.includes("totp") || errorText.includes("otp") || errorText.includes("2fa") || errorText.includes("two-factor");
   }
 }

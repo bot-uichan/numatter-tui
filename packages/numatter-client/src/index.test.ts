@@ -151,6 +151,28 @@ describe("NumatterClient", () => {
     await expect(client.getUnreadNotificationCount()).rejects.toEqual(expect.objectContaining({ name: "NumatterApiError", status: 500 }));
   });
 
+  it("retries with TOTP code when API requires 2FA", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(mockResponse({ status: 403, json: { error: "TOTP code required" } }))
+      .mockResolvedValueOnce(mockResponse({ json: { token: { id: "t1" }, plainToken: "nmt_dev_x" } }));
+    const totpProvider = vi.fn().mockResolvedValue("123456");
+    const client = new NumatterClient({
+      baseUrl: "https://example.com",
+      token: "t",
+      fetch: fetchMock as unknown as typeof fetch,
+      totpProvider,
+    });
+
+    await client.createToken({ name: "cli" });
+
+    expect(totpProvider).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect((secondInit.headers as Headers).get("x-totp-code")).toBe("123456");
+    expect((secondInit.headers as Headers).get("x-otp-code")).toBe("123456");
+  });
+
   it("handles invalid JSON error body", async () => {
     const response = { ok: false, status: 503, json: vi.fn().mockRejectedValue(new Error("bad json")) } as unknown as Response;
     const fetchMock = vi.fn().mockResolvedValue(response);

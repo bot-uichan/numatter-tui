@@ -1,7 +1,7 @@
 import { NumatterClient } from "numatter-client";
 
-export const createService = (baseUrl: string, token: string) => {
-  const client = new NumatterClient({ baseUrl, token });
+export const createService = (baseUrl: string, token: string, options?: { totpProvider?: () => Promise<string | null> }) => {
+  const client = new NumatterClient({ baseUrl, token, totpProvider: options?.totpProvider });
   return {
     client,
     refreshDashboard: async () => {

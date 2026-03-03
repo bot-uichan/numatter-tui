@@ -30,7 +30,9 @@ if (!baseUrl || !token) {
   process.exit(1);
 }
 
-const service = createService(baseUrl, token);
+const service = createService(baseUrl, token, {
+  totpProvider: async () => ask("TOTP code (6 digits)"),
+});
 const state = initialState();
 
 if (!process.env.LANG?.toLowerCase().includes("utf-8") && !process.env.LC_ALL?.toLowerCase().includes("utf-8")) {

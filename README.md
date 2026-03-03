@@ -10,7 +10,7 @@ Numatter Developer API 向けのターミナル UI です。内部で `numatter-
 - Notifications API: 一覧 / 未読数 / 詳細 / mark-as-read(all)
 - Notification Webhooks API: 一覧 / 作成 / 更新 / 削除 / manual send
 - Token endpoints (`/api/developer/tokens`): 一覧 / 作成 / revoke
-  - 注意: これらは通常セッション認証エンドポイントのため、Bearer token では 401/403 の可能性があります
+  - Bearer tokenのみで拒否された場合、TOTP要求レスポンス(401/403)を検知してコード入力→自動リトライします
 
 ## Setup
 
